@@ -17,6 +17,24 @@ Si `~/.pi/agent/models.json` existe déjà, ne l’écrase pas : fusionne plutô
 
 Redémarre Pi Agent, exécute `/model`, puis sélectionne **GPT-6 Luna via Codex Proxy**. La clé `local` est une valeur de compatibilité ; le proxy ne vérifie pas de clé API. Vérifie que l’IP d’exemple correspond bien à l’adresse locale de la machine hébergeant Docker et que le port `3000` est accessible depuis la machine Pi.
 
+### Utiliser LiteLLM pour partager le login Codex (port 4000)
+
+Pour partager un seul login ChatGPT Codex entre plusieurs Pi Agent tout en laissant chaque Pi exécuter ses outils sur sa propre machine, utilisez la configuration LiteLLM. Le déploiement est défini dans `docker-compose.litellm.yml` et `litellm-config.yaml`. Il expose `gpt-6-luna` sur le port `4000` et réutilise le login ChatGPT Codex stocké dans `litellm-auth/`.
+
+Effectuez une fois le login OAuth sur le serveur LiteLLM :
+
+```sh
+mkdir -p litellm-auth
+docker run --rm -it -v "$PWD/litellm-auth:/root/.config/litellm/chatgpt" \\
+  --entrypoint python ghcr.io/berriai/litellm:main-stable -c \\
+  'from litellm.llms.chatgpt.authenticator import Authenticator; Authenticator().get_access_token()'
+docker compose -f docker-compose.litellm.yml up -d
+```
+
+Le login affiche un code à saisir sur `https://auth.openai.com/codex/device`. Ensuite, sur chaque Pi, fusionnez l’entrée du fichier [`models-litellm.json`](models-litellm.json) dans `~/.pi/agent/models.json`, puis choisissez **GPT-6 Luna via LiteLLM (test)** avec `/model`. Gardez l’entrée `codex-proxy` si vous souhaitez aussi conserver l’ancien proxy ; les endpoints sont distincts.
+
+Ce mode sans clé est volontairement non authentifié : tout appareil autorisé à joindre le port `4000` peut consommer le quota du compte. Limite l’accès au réseau local par le pare-feu.
+
 ## Déploiement Docker Compose
 
 Ce dépôt construit [mehdic/codex-proxy](https://github.com/mehdic/codex-proxy) depuis sa branche par défaut dans une image Node 20. L’API est publiée sur le port `3000` de l’hôte (et écoute sur `3466` dans le conteneur) ; les données Codex sont conservées dans le volume nommé `codex_auth`.

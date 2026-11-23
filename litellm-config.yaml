@@ -1,0 +1,7 @@
+model_list:
+  - model_name: gpt-6-luna
+    litellm_params:
+      model: chatgpt/gpt-6-luna
+
+litellm_settings:
+  drop_params: true

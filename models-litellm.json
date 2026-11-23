@@ -1,0 +1,18 @@
+{
+  "$schema": "https://pi.dev/schemas/models.schema.json",
+  "providers": {
+    "litellm-codex-test": {
+      "baseUrl": "http://192.168.0.92:4000/v1",
+      "api": "openai-responses",
+      "apiKey": "local",
+      "models": [
+        {
+          "id": "gpt-6-luna",
+          "name": "GPT-6 Luna via LiteLLM (test)",
+          "reasoning": true,
+          "input": ["text"]
+        }
+      ]
+    }
+  }
+}
