@@ -1,0 +1,30 @@
+services:
+  codex-proxy:
+    build: .
+    container_name: codex-proxy
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CODEX_PROXY_HOST: ${CODEX_PROXY_HOST:-0.0.0.0}
+      CODEX_PROXY_PORT: "3466"
+      CODEX_PROXY_RUNTIME: ${CODEX_PROXY_RUNTIME:-pool}
+      CODEX_PROXY_POOL_MAX: ${CODEX_PROXY_POOL_MAX:-16}
+      CODEX_PROXY_DEFAULT_MODEL: ${CODEX_PROXY_DEFAULT_MODEL:-gpt-6-luna}
+      CODEX_PROXY_SANDBOX: ${CODEX_PROXY_SANDBOX:-read-only}
+      CODEX_PROXY_APPROVAL_POLICY: ${CODEX_PROXY_APPROVAL_POLICY:-never}
+    ports:
+      - "${CODEX_PROXY_PORT:-3000}:3466"
+    volumes:
+      - codex_auth:/root/.codex
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:3466/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  codex_auth:
+    name: codex-proxy-docker_codex_auth
+    external: true
