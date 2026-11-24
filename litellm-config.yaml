@@ -1,7 +1,87 @@
-model_list:
-  - model_name: gpt-6-luna
-    litellm_params:
-      model: chatgpt/gpt-6-luna
-
 litellm_settings:
   drop_params: true
+model_list:
+- model_name: gpt-6.2-sol
+  litellm_params:
+    model: chatgpt/gpt-6.2-sol
+  model_info:
+    mode: responses
+    max_input_tokens: 500000
+    max_output_tokens: 32768
+- model_name: gpt-6.2-astra
+  litellm_params:
+    model: chatgpt/gpt-6.2-astra
+  model_info:
+    mode: responses
+    max_input_tokens: 272000
+    max_output_tokens: 32768
+- model_name: gpt-6.1-terra
+  litellm_params:
+    model: chatgpt/gpt-6.1-terra
+  model_info:
+    mode: responses
+    max_input_tokens: 500000
+    max_output_tokens: 32768
+- model_name: gpt-reserve
+  litellm_params:
+    model: chatgpt/gpt-reserve
+  model_info:
+    mode: responses
+    max_input_tokens: 272000
+    max_output_tokens: 32768
+- model_name: gpt-6.1-sol
+  litellm_params:
+    model: chatgpt/gpt-6.1-sol
+  model_info:
+    mode: responses
+    max_input_tokens: 500000
+    max_output_tokens: 32768
+- model_name: gpt-6-astra
+  litellm_params:
+    model: chatgpt/gpt-6-astra
+  model_info:
+    mode: responses
+    max_input_tokens: 272000
+    max_output_tokens: 32768
+- model_name: gpt-6-sol
+  litellm_params:
+    model: chatgpt/gpt-6-sol
+  model_info:
+    mode: responses
+    max_input_tokens: 272000
+    max_output_tokens: 32768
+- model_name: gpt-6-luna
+  litellm_params:
+    model: chatgpt/gpt-6-luna
+  model_info:
+    mode: responses
+    max_input_tokens: 272000
+    max_output_tokens: 32768
+- model_name: gpt-5.6-sol
+  litellm_params:
+    model: chatgpt/gpt-5.6-sol
+  model_info:
+    mode: responses
+    max_input_tokens: 272000
+    max_output_tokens: 32768
+- model_name: gpt-5.6-terra
+  litellm_params:
+    model: chatgpt/gpt-5.6-terra
+  model_info:
+    mode: responses
+    max_input_tokens: 272000
+    max_output_tokens: 32768
+- model_name: gpt-5.6-luna
+  litellm_params:
+    model: chatgpt/gpt-5.6-luna
+  model_info:
+    mode: responses
+    max_input_tokens: 272000
+    max_output_tokens: 32768
+- model_name: codex-auto-review
+  litellm_params:
+    model: chatgpt/codex-auto-review
+  model_info:
+    mode: responses
+    max_input_tokens: 272000
+    max_output_tokens: 32768

@@ -1,30 +1,40 @@
 services:
-  codex-proxy:
-    build: .
-    container_name: codex-proxy
+  litellm-db:
+    image: postgres:16-alpine
+    container_name: litellm-postgres
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
-      CODEX_PROXY_HOST: ${CODEX_PROXY_HOST:-0.0.0.0}
-      CODEX_PROXY_PORT: "3466"
-      CODEX_PROXY_RUNTIME: ${CODEX_PROXY_RUNTIME:-pool}
-      CODEX_PROXY_POOL_MAX: ${CODEX_PROXY_POOL_MAX:-16}
-      CODEX_PROXY_DEFAULT_MODEL: ${CODEX_PROXY_DEFAULT_MODEL:-gpt-6-luna}
-      CODEX_PROXY_SANDBOX: ${CODEX_PROXY_SANDBOX:-read-only}
-      CODEX_PROXY_APPROVAL_POLICY: ${CODEX_PROXY_APPROVAL_POLICY:-never}
-    ports:
-      - "${CODEX_PROXY_PORT:-3000}:3466"
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${LITELLM_DB_PASSWORD:?Set LITELLM_DB_PASSWORD in .env}
+      POSTGRES_DB: litellm
     volumes:
-      - codex_auth:/root/.codex
+      - litellm_db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:3466/health"]
-      interval: 30s
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
       timeout: 5s
-      retries: 3
-      start_period: 20s
+      retries: 10
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: litellm
+    restart: unless-stopped
+    depends_on:
+      litellm-db:
+        condition: service_healthy
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?Set LITELLM_MASTER_KEY in .env}
+      LITELLM_DANGEROUSLY_PERMIT_WEAK_OR_UNSET_MASTER_KEY: "true"
+      DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD}@litellm-db:5432/litellm
+      CODEX_CLIENT_VERSION: "0.166.0"
+    entrypoint: ["python", "/app/start_litellm.py"]
+    command: ["--port", "4000", "--host", "0.0.0.0"]
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm-config.yaml:/app/litellm-config.yaml
+      - ./start_litellm.py:/app/start_litellm.py:ro
+      - ./litellm-auth:/root/.config/litellm/chatgpt
 
 volumes:
-  codex_auth:
-    name: codex-proxy-docker_codex_auth
-    external: true
+  litellm_db:
