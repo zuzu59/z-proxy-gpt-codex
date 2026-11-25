@@ -1,8 +1,10 @@
 # LiteLLM Codex Gateway
 
-LiteLLM lit le catalogue des modèles Codex au démarrage, génère la section `model_list` de `litellm-config.yaml`, puis expose tous ces modèles sur une seule API. Pi récupère cette liste via `/v1/models`. Chaque client Pi exécute ses outils localement.
+LiteLLM lit le catalogue Codex au démarrage, génère `model_list` dans `litellm-config.yaml` et expose les modèles en HTTPS sur le port **4000**. Le certificat est auto-signé. L’extension Pi personnalisée reste disponible.
 
-## Démarrer le proxy
+## Démarrer le serveur
+
+Depuis le dépôt, sur le serveur LiteLLM :
 
 ```sh
 cp .env.example .env
@@ -10,42 +12,78 @@ cp .env.example .env
 ./start.sh
 ```
 
-Le login ChatGPT Codex se fait une seule fois côté serveur. À chaque démarrage de LiteLLM, le catalogue du compte est relu et `litellm-config.yaml` est régénéré. Pour actualiser le catalogue, relance `./start.sh`.
+`start.sh` détecte l’adresse LAN et crée le certificat auto-signé au premier démarrage. Exemple actuel :
 
-- API LiteLLM : `http://<IP_SERVEUR>:4000/v1`
-- Console : `http://<IP_SERVEUR>:4000/ui`
+- API LiteLLM : `https://192.168.0.92:4000`
+- Téléchargement du certificat : `http://192.168.0.92:4001/litellm.crt`
 
-Le volume `litellm-auth/` contient les jetons OAuth et est ignoré par Git. La base PostgreSQL reste dans le volume Docker `litellm_db`.
+Si l’adresse de ton serveur est différente, remplace `192.168.0.92` par son adresse dans les commandes ci-dessous. Le serveur sur 4001 distribue uniquement le certificat public, jamais la clé privée. Aucun port inférieur à 1000 n’est utilisé.
 
-## Pi Agent : découvrir et choisir un modèle
+Le login ChatGPT Codex se fait une seule fois côté serveur. Au redémarrage, le catalogue du compte est relu et `litellm-config.yaml` est régénéré. Si l’adresse IP change, supprime `tls/litellm.crt` et `tls/litellm.key`, puis relance `./start.sh` pour générer un certificat correspondant à la nouvelle adresse. Ces fichiers sont ignorés par Git ; ne partage jamais la clé privée.
 
-Sur chaque client, installe l’extension une seule fois :
+## Configurer chaque client Pi
+
+Installe le package (ou garde-le dans la liste `packages` de `~/.pi/agent/settings.json`) :
 
 ```sh
-./install-pi-extension.sh
+pi install npm:pi-provider-litellm
 ```
 
-Si le dépôt n’est pas présent sur la machine cliente, copie `pi-extension/litellm-codex.ts` vers `~/.pi/agent/extensions/litellm-codex.ts`.
+Puis télécharge le certificat et lance Pi en lui indiquant de lui faire confiance :
 
-Dans Pi :
+```sh
+mkdir -p ~/.pi/agent
+wget http://192.168.0.92:4001/litellm.crt -O ~/.pi/agent/litellm.crt
+NODE_EXTRA_CA_CERTS="$HOME/.pi/agent/litellm.crt" pi
+```
+
+Dans Pi, lance `/login litellm`, saisis l’URL `https://192.168.0.92:4000` et la clé API (`admin`), puis `/model` pour choisir un modèle.
+
+Pour configurer directement l’URL dans `~/.pi/agent/settings.json`, fusionne cette section à la racine du fichier, en conservant tes autres paramètres :
+
+```json
+{
+  "litellm": {
+    "providers": {
+      "litellm": {
+        "baseUrl": "https://192.168.0.92:4000"
+      }
+    }
+  }
+}
+```
+
+N’ajoute pas `allowInsecureHttp` avec HTTPS. Pour que chaque nouveau terminal Pi charge automatiquement le certificat, ajoute ceci au profil shell utilisé (`~/.bashrc` ou `~/.zshrc`) :
+
+```sh
+export NODE_EXTRA_CA_CERTS="$HOME/.pi/agent/litellm.crt"
+```
+
+Le téléchargement HTTP du certificat n’authentifie pas le serveur ; cette méthode est prévue pour le réseau local de confiance. Il faut conserver `NODE_EXTRA_CA_CERTS` : sans cela, Node rejette le certificat auto-signé. Évite `NODE_TLS_REJECT_UNAUTHORIZED=0`, qui désactive la validation TLS pour toutes les connexions HTTPS de Pi.
+
+## Extension personnalisée
+
+L’extension du projet est conservée dans `pi-extension/litellm-codex.ts`. Pour l’utiliser à la place du package, installe-la avec `./install-pi-extension.sh`, puis utilise dans Pi :
 
 ```text
 /login litellm-codex
 /model
 ```
 
-À la première connexion, saisis l’URL de LiteLLM (`http://<IP_SERVEUR>:4000/v1`) et la clé API (`admin`). L’adresse n’est pas inscrite dans l’extension : elle est configurée une fois par client. `/model` affiche les modèles publiés par le proxy ; choisis celui à utiliser. Pour rafraîchir la liste après un changement du catalogue, relance d’abord `./start.sh` côté serveur, puis rouvre `/model`.
+Configure son URL comme `https://192.168.0.92:4000/v1`. Elle aussi nécessite `NODE_EXTRA_CA_CERTS`.
 
-## Sécurité et vérification
+## Vérifier et arrêter
 
-Cette configuration de démonstration utilise la clé `admin` ; les ports doivent rester sur le réseau local et ne pas être exposés à Internet. Le catalogue ChatGPT interrogé est un endpoint interne non documenté, susceptible d’évoluer.
+Depuis un client qui a téléchargé le certificat :
 
 ```sh
-curl -fsS http://127.0.0.1:4000/health/liveliness
-curl -fsS -H 'Authorization: Bearer admin' http://127.0.0.1:4000/v1/models
+curl --cacert ~/.pi/agent/litellm.crt https://192.168.0.92:4000/health/liveliness
+curl --cacert ~/.pi/agent/litellm.crt -H 'Authorization: Bearer admin' https://192.168.0.92:4000/v1/models
 ```
 
-Arrêter les conteneurs sans supprimer les données :
+La clé de démonstration `admin` est faible : change-la dans `.env` et n’expose pas ces ports à Internet.
+
+Pour arrêter les conteneurs sans supprimer les données :
 
 ```sh
 ./stop.sh

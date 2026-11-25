@@ -28,13 +28,33 @@ services:
       DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD}@litellm-db:5432/litellm
       CODEX_CLIENT_VERSION: "0.166.0"
     entrypoint: ["python", "/app/start_litellm.py"]
-    command: ["--port", "4000", "--host", "0.0.0.0"]
+    command:
+      - "--port"
+      - "4000"
+      - "--host"
+      - "0.0.0.0"
+      - "--ssl_keyfile_path"
+      - "/app/tls/litellm.key"
+      - "--ssl_certfile_path"
+      - "/app/tls/litellm.crt"
     ports:
       - "4000:4000"
     volumes:
       - ./litellm-config.yaml:/app/litellm-config.yaml
       - ./start_litellm.py:/app/start_litellm.py:ro
       - ./litellm-auth:/root/.config/litellm/chatgpt
+      - ./tls:/app/tls:ro
+
+  cert-download:
+    image: python:3.12-alpine
+    container_name: litellm-cert-download
+    restart: unless-stopped
+    command: ["python", "/app/serve_cert.py"]
+    ports:
+      - "4001:4001"
+    volumes:
+      - ./serve_cert.py:/app/serve_cert.py:ro
+      - ./tls/litellm.crt:/cert/litellm.crt:ro
 
 volumes:
   litellm_db:

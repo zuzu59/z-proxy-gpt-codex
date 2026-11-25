@@ -154,6 +154,7 @@ activemq-data/
 .envrc
 .venv
 litellm-auth/
+tls/
 env/
 venv/
 ENV/
