@@ -1,42 +1,157 @@
 # Spécification de reconstruction — LiteLLM Codex Gateway
 
-## Objectif
+## Contexte et objectif
 
-Construire un service local LiteLLM qui partage un unique login OAuth ChatGPT/Codex entre plusieurs Pi Agent. Le service fournit l’inférence via une API OpenAI-compatible ; les outils agentiques doivent rester exécutés par Pi sur chaque client, et non sur le serveur LiteLLM.
+Construire et maintenir un proxy LiteLLM local qui partage une authentification
+ChatGPT/Codex centralisée entre plusieurs clients Pi. Le serveur gère OAuth et
+l’inférence. Chaque client Pi exécute ses outils sur sa propre machine.
 
-## Contraintes fonctionnelles
+Avant de modifier le dépôt, inspecter son état et ses fichiers actuels.
+Adapter la solution existante ; ne pas recréer aveuglément des fichiers déjà
+présents ni restaurer d’anciens composants supprimés.
 
-- Fournisseur LiteLLM : catalogue Codex dynamique récupéré au démarrage ; créer un alias pour chaque slug via Responses API.
-- Authentification : OAuth ChatGPT/Codex par code d’appareil, réalisée une seule fois sur le serveur. Monter `litellm-auth/` vers `/root/.config/litellm/chatgpt` afin de persister et renouveler les jetons.
-- Endpoint LAN : LiteLLM sert HTTPS directement sur le port hôte/conteneur `4000`, avec un certificat auto-signé. Un serveur HTTP minimal sur le port `4001` ne distribue que `litellm.crt` et `install_litllm_pi.sh` par liste blanche ; ne jamais monter la clé privée dans ce service. Ne pas ajouter Caddy, Nginx, reverse proxy ou port inférieur à `1000`.
-- Console d’administration : `/ui`, utilisateur `admin`, master key de développement `admin`.
-- PostgreSQL est requis pour la console de gestion. Le service doit attendre l’état healthy de PostgreSQL. Persister les données dans un volume Docker nommé `litellm_db`.
-- Au démarrage, `start_litellm.py` lit le catalogue du compte ChatGPT Codex et régénère le `model_list` de `litellm-config.yaml`.
-- Pi utilise uniquement le package officiel `pi-provider-litellm`, avec `https://<IP_SERVEUR>:4000` et `/login litellm`.
-- Le certificat auto-signé n’est pas accepté par Node par défaut. Documenter `NODE_EXTRA_CA_CERTS` pointant vers le certificat public pour faire confiance sans modifier le magasin système. Ne jamais désactiver la validation TLS globalement par défaut.
-- Le secret `admin` est faible et destiné uniquement à un réseau local isolé. Signaler qu’il ne faut jamais exposer le port `4000` sur Internet ; restreindre l’accès au LAN avec le pare-feu.
-- Aucun service ou fichier de configuration d’un autre proxy ne doit être inclus.
+## Architecture cible
 
-## Fichiers attendus
+- Docker Compose orchestre l’image `ghcr.io/berriai/litellm:main-stable`,
+  PostgreSQL et un serveur de téléchargement minimal.
+- LiteLLM sert l’API et la console directement en HTTPS sur le port `4000`.
+- Le service de téléchargement sert en HTTP sur le port `4001` uniquement le
+  certificat public et l’installateur Pi. Il ne doit jamais accéder à la
+  clé privée TLS.
+- PostgreSQL est accessible uniquement dans le réseau Compose et conserve
+  ses données dans le volume Docker `litellm_db`.
+- Pi utilise le package officiel `pi-provider-litellm`. Ne pas réintroduire
+  d’extension Pi personnalisée, de service catalogue supplémentaire ou de
+  configuration client statique `models.json`.
+- Les outils Pi (terminal, accès aux fichiers, etc.) restent exécutés sur
+  chaque client, jamais sur le serveur LiteLLM.
 
-- `docker-compose.yml` : services LiteLLM et PostgreSQL, healthcheck Postgres, dépendance healthy, port 4000 avec TLS, certificat/key montés en lecture seule et volumes persistants.
-- `generate-self-signed-cert.sh` : génération d’un certificat SAN correspondant à l’IP ou au nom LAN.
-- `serve_cert.py` : serveur de téléchargement à liste blanche qui sert le certificat public et le script d’installation Pi sur le port 4001, jamais la clé privée.
-- `start.sh` : détecte l’adresse LAN, crée le certificat à la première exécution et relance le proxy pour régénérer le catalogue.
-- `litellm-config.yaml` : configuration de base que `start_litellm.py` complète avec les modèles disponibles.
-- `.env.example` : master key locale et mot de passe DB d’exemple.
-- `.env` : local, ignoré par Git ; ne jamais committer secrets.
-- `.gitignore` : au minimum `.env` et `litellm-auth/`.
-- `litellm-auth/` : stockage local OAuth, jamais versionné.
-- `install_litllm_pi.sh` : installateur client appelé par une commande `curl | bash`, télécharge le certificat, installe le package Pi officiel, fusionne les paramètres requis dans `settings.json` sans écraser le reste et configure `NODE_EXTRA_CA_CERTS`.
-- `README.md` : procédure de démarrage et commande `curl | bash` complète pour les clients Pi.
+N’ajouter aucun reverse proxy ni port inférieur à `1000`.
 
-## Procédure d’installation attendue
+## Authentification et découverte des modèles
 
-1. Vérifier les versions et la configuration LiteLLM documentées ; ne pas inventer les paramètres du fournisseur.
-2. Copier `.env.example` vers `.env` et configurer les valeurs.
-3. Créer `litellm-auth/`, lancer l’image LiteLLM avec `Authenticator().get_access_token()` et demander le code sur `https://auth.openai.com/codex/device`.
-4. Lancer `./start.sh` : générer si nécessaire le certificat SAN auto-signé, récupérer le catalogue, lancer LiteLLM sur HTTPS/4000 et le serveur de certificat sur 4001.
-5. Sur chaque client, exécuter `curl -fsSL http://<serveur>:4001/install_litllm_pi.sh | bash -s -- <serveur>` ; le script est distribué par le serveur LAN, télécharge et valide le certificat par rapport à l’IP, installe `pi-provider-litellm`, fusionne `litellm.providers.litellm` dans `settings.json`, demande la clé API, et ajoute `NODE_EXTRA_CA_CERTS` au profil shell. Après ouverture d’un nouveau terminal, Pi doit démarrer directement avec `pi`. Documenter que ce curl HTTP exécutant un script n’est sûr que sur le réseau local de confiance.
-6. Vérifier `/v1/models`, une vraie requête HTTPS et l’exécution locale d’un outil Pi.
-7. Ne jamais supprimer les volumes persistants contenant base de données ou jetons sans autorisation explicite.
+- Effectuer le login OAuth ChatGPT/Codex une seule fois sur le serveur, avec le
+  flux par code d’appareil. Persister les jetons dans `litellm-auth/`, monté
+  dans le conteneur sous `/root/.config/litellm/chatgpt`.
+- Ne jamais exposer ni copier ces jetons OAuth vers les clients Pi.
+- Au démarrage de LiteLLM, `start_litellm.py` doit récupérer le catalogue du
+  compte et régénérer `model_list` dans `litellm-config.yaml` avant de lancer
+  LiteLLM.
+- L’endpoint amont observé est
+  `https://chatgpt.com/backend-api/codex/models`. C’est une API interne, non
+  garantie comme stable. Construire les en-têtes avec l’authentificateur
+  LiteLLM et `CODEX_CLIENT_VERSION`, puis valider la réponse avant
+  de l’utiliser.
+- Pour chaque slug reçu, exposer le slug comme nom LiteLLM et router vers
+  `chatgpt/<slug>` en mode `responses`. Utiliser `context_window` si présent,
+  sinon `272000`, et définir la limite de sortie à `32768` tokens.
+- Réécrire uniquement `model_list` et préserver les autres paramètres YAML,
+  notamment `litellm_settings.drop_params`. Ne pas faire dépendre la liste
+  effective d’un catalogue statique ou de modifications manuelles de Pi.
+- Si le login, le réseau, le statut HTTP ou le format du catalogue échoue,
+  signaler l’erreur et ne pas lancer LiteLLM avec une liste présentée comme
+  actualisée.
+
+## TLS et distribution du certificat
+
+- Générer un certificat auto-signé avec SAN IP ou DNS correspondant à
+  `LITELLM_DOMAIN`. La clé privée `tls/litellm.key` doit rester locale, avec
+  des permissions restrictives. Le certificat public est `tls/litellm.crt`.
+- `start.sh` accepte `LITELLM_DOMAIN` ou détecte l’adresse LAN par défaut,
+  génère le certificat s’il manque, puis démarre LiteLLM et le service de
+  téléchargement.
+- Le script de certificat réutilise les fichiers existants sans vérifier
+  leur SAN. Documenter qu’après un changement d’adresse il faut supprimer
+  `tls/litellm.crt` et `tls/litellm.key`, puis redémarrer.
+- Activer TLS directement dans LiteLLM sur le port `4000` avec les chemins de
+  certificat et de clé. Ne pas désactiver la validation TLS dans Pi.
+- Le serveur `serve_cert.py` utilise une liste blanche exacte :
+  `/litellm.crt` et `/install_litllm_pi.sh`. Tout autre chemin renvoie `404`.
+  Monter uniquement le certificat public et le script, en lecture seule.
+- L’installation client place le certificat sous
+  `~/.pi/agent/litellm.crt` et configure `NODE_EXTRA_CA_CERTS`. Ne pas
+  recommander `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+- Le port `4001` utilise HTTP sans authentification. Avertir que le
+  téléchargement initial du script et du certificat n’est sûr que sur un
+  réseau local de confiance ; le contrôle SAN ne prouve pas l’identité du
+  serveur quand le certificat est reçu en clair.
+
+## API, console et secrets
+
+- Exiger `LITELLM_MASTER_KEY` pour l’API et la console LiteLLM.
+- PostgreSQL doit être `healthy` avant le démarrage de LiteLLM. Lire le secret
+  DB depuis `LITELLM_DB_PASSWORD` et le conserver cohérent avec le volume.
+- Les valeurs d’exemple `LITELLM_MASTER_KEY=admin` et le flag
+  `LITELLM_DANGEROUSLY_PERMIT_WEAK_OR_UNSET_MASTER_KEY=true` sont faibles et
+  réservés à un LAN contrôlé. Documenter le risque ; ne jamais exposer le
+  service sur Internet.
+- Le client reçoit uniquement la clé API LiteLLM. L’installateur la demande
+  (valeur par défaut de démonstration : `admin`) puis l’enregistre dans
+  `~/.pi/agent/settings.json` avec les permissions `600`.
+- Ne jamais versionner `.env`, `litellm-auth/`, `tls/litellm.key` ou tout jeton.
+  `.gitignore` doit exclure `.env`, `litellm-auth/` et `tls/`.
+
+## Installation Pi
+
+`install_litllm_pi.sh` doit exiger exactement un argument : adresse IP ou nom
+DNS du serveur. Ne jamais coder une adresse IP par défaut dans le script.
+Le script doit vérifier ses dépendances (`curl`, `openssl`, `node`, `pi`),
+télécharger le certificat via le port `4001`, contrôler son SAN, installer
+`npm:pi-provider-litellm`, puis fusionner les paramètres dans
+`~/.pi/agent/settings.json` sans écraser les autres réglages.
+
+Exemple d’installation client :
+
+```sh
+IP=adresse-ip-ou-dns-du-serveur
+curl -fsSL "http://$IP:4001/install_litllm_pi.sh" | bash -s -- "$IP"
+```
+
+Configurer `litellm.providers.litellm` avec l’URL `https://<serveur>:4000`, la
+clé API fournie par l’utilisateur et `allowInsecureHttp: false`. Après
+l’installation, un nouveau terminal doit suffire pour lancer `pi` et choisir
+un modèle avec `/model`. Aucun `/login` Pi supplémentaire n’est requis pour
+cette configuration par paramètres.
+
+## Fichiers du projet
+
+Maintenir les fichiers suivants à la racine du dépôt :
+
+- `docker-compose.yml` : LiteLLM, PostgreSQL, service de téléchargement,
+  ports, variables et volumes ;
+- `litellm-config.yaml` : paramètres LiteLLM et catalogue initial ;
+- `start_litellm.py` : récupération du catalogue et lancement du proxy ;
+- `get_authentification.sh` : login OAuth initial côté serveur ;
+- `start.sh` et `stop.sh` : démarrage et arrêt sans supprimer les volumes ;
+- `generate-self-signed-cert.sh` : création du certificat TLS ;
+- `serve_cert.py` : distribution HTTP par liste blanche ;
+- `install_litllm_pi.sh` : installation d’un client Pi ;
+- `.env.example` et `.gitignore` ;
+- `README.md` : guide utilisateur en français ;
+- `ARCHITECTURE.md` : documentation technique en français ;
+- `PROMPT2.md` : présente spécification de reconstruction.
+
+Ne pas supprimer ou recréer les jetons OAuth, les certificats, `.env` ou le
+volume PostgreSQL sans autorisation explicite. `docker compose down` doit
+conserver le volume ; ne pas utiliser `docker compose down -v` par défaut.
+
+## Vérifications de livraison
+
+Avant de terminer :
+
+1. Valider `docker compose config`, la syntaxe des scripts Bash et Python, et
+   le YAML généré.
+2. Vérifier que le catalogue est récupéré et que LiteLLM démarre en HTTPS
+   sur `4000`, avec PostgreSQL `healthy`.
+3. Vérifier l’accès authentifié à `/v1/models` et une vraie requête
+   Responses, sans afficher les jetons OAuth dans la sortie.
+4. Vérifier que `4001` sert exactement les deux chemins autorisés, que les
+   autres renvoient `404` et que la clé privée n’est pas montée dans le
+   conteneur de téléchargement.
+5. Tester l’installateur dans un environnement Pi isolé : paramètres
+   préexistants préservés, argument requis, certificat configuré et aucun IP
+   codé en dur dans le script.
+6. Vérifier avec Pi que `/model` présente le catalogue, qu’une requête
+   aboutit et que les outils s’exécutent sur la machine cliente.
+7. Mettre à jour `README.md` et `ARCHITECTURE.md` si le comportement change.
+8. Rapporter les tests réellement exécutés et les limites restantes.
