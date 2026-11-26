@@ -1,6 +1,6 @@
 # LiteLLM Codex Gateway
 
-LiteLLM lit le catalogue Codex au démarrage, génère `model_list` dans `litellm-config.yaml` et expose les modèles en HTTPS sur le port **4000**. Le certificat est auto-signé. L’extension Pi personnalisée reste disponible.
+LiteLLM lit le catalogue Codex au démarrage, génère `model_list` dans `litellm-config.yaml` et expose les modèles en HTTPS sur le port **4000**. Le certificat est auto-signé. Pi utilise le package officiel `pi-provider-litellm`.
 
 ## Démarrer le serveur
 
@@ -60,17 +60,6 @@ export NODE_EXTRA_CA_CERTS="$HOME/.pi/agent/litellm.crt"
 ```
 
 Le téléchargement HTTP du certificat n’authentifie pas le serveur ; cette méthode est prévue pour le réseau local de confiance. Il faut conserver `NODE_EXTRA_CA_CERTS` : sans cela, Node rejette le certificat auto-signé. Évite `NODE_TLS_REJECT_UNAUTHORIZED=0`, qui désactive la validation TLS pour toutes les connexions HTTPS de Pi.
-
-## Extension personnalisée
-
-L’extension du projet est conservée dans `pi-extension/litellm-codex.ts`. Pour l’utiliser à la place du package, installe-la avec `./install-pi-extension.sh`, puis utilise dans Pi :
-
-```text
-/login litellm-codex
-/model
-```
-
-Configure son URL comme `https://192.168.0.92:4000/v1`. Elle aussi nécessite `NODE_EXTRA_CA_CERTS`.
 
 ## Vérifier et arrêter
 

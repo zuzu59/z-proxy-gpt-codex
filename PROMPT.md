@@ -10,7 +10,7 @@ Déployer LiteLLM avec Docker Compose pour partager une seule authentification C
 - Déployer PostgreSQL pour la console LiteLLM et persister ses données dans un volume Docker.
 - Configurer une master key locale `admin` pour l’interface et l’API. Documenter clairement que ce secret faible impose de limiter le port au LAN et de ne jamais l’exposer à Internet.
 - Au démarrage, lire le catalogue ChatGPT Codex et générer `model_list` dans `litellm-config.yaml`.
-- Documenter `pi install npm:pi-provider-litellm` et l’URL `https://<IP_SERVEUR>:4000`. Garder aussi `pi-extension/litellm-codex.ts`.
+- Documenter uniquement le package officiel `pi install npm:pi-provider-litellm` et l’URL `https://<IP_SERVEUR>:4000`.
 - Expliquer que Node rejette les certificats auto-signés par défaut : recommander `NODE_EXTRA_CA_CERTS` avec le certificat public, sans l’installer dans le magasin système. Ne pas désactiver la vérification TLS par défaut.
 
 # Fichiers attendus
@@ -20,8 +20,6 @@ Déployer LiteLLM avec Docker Compose pour partager une seule authentification C
 - `.env.example` et `.env` local ignoré par Git
 - `.gitignore` qui exclut les jetons OAuth
 - `start_litellm.py`, `generate-self-signed-cert.sh` et `serve_cert.py`
-- `pi-extension/litellm-codex.ts` pour la découverte native personnalisée
-- `models.json` sans liste statique de modèles Pi
 - `README.md` avec les étapes d’installation, d’authentification, de configuration Pi et de vérification
 
 Ne jamais versionner les jetons OAuth, les secrets locaux ou `.env`. Ne pas déployer ni documenter d’autre proxy.

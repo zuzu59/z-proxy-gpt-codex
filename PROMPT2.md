@@ -12,7 +12,7 @@ Construire un service local LiteLLM qui partage un unique login OAuth ChatGPT/Co
 - Console d’administration : `/ui`, utilisateur `admin`, master key de développement `admin`.
 - PostgreSQL est requis pour la console de gestion. Le service doit attendre l’état healthy de PostgreSQL. Persister les données dans un volume Docker nommé `litellm_db`.
 - Au démarrage, `start_litellm.py` lit le catalogue du compte ChatGPT Codex et régénère le `model_list` de `litellm-config.yaml`.
-- L’API Pi package utilise `https://<IP_SERVEUR>:4000` et `/login litellm`. Garder l’extension personnalisée `pi-extension/litellm-codex.ts` comme solution alternative.
+- Pi utilise uniquement le package officiel `pi-provider-litellm`, avec `https://<IP_SERVEUR>:4000` et `/login litellm`.
 - Le certificat auto-signé n’est pas accepté par Node par défaut. Documenter `NODE_EXTRA_CA_CERTS` pointant vers le certificat public pour faire confiance sans modifier le magasin système. Ne jamais désactiver la validation TLS globalement par défaut.
 - Le secret `admin` est faible et destiné uniquement à un réseau local isolé. Signaler qu’il ne faut jamais exposer le port `4000` sur Internet ; restreindre l’accès au LAN avec le pare-feu.
 - Aucun service ou fichier de configuration d’un autre proxy ne doit être inclus.
@@ -28,7 +28,6 @@ Construire un service local LiteLLM qui partage un unique login OAuth ChatGPT/Co
 - `.env` : local, ignoré par Git ; ne jamais committer secrets.
 - `.gitignore` : au minimum `.env` et `litellm-auth/`.
 - `litellm-auth/` : stockage local OAuth, jamais versionné.
-- `models.json` : aucune liste statique nécessaire pour le package Pi dynamique.
 - `README.md` : procédure complète de démarrage et dépannage.
 
 ## Procédure d’installation attendue
@@ -37,6 +36,6 @@ Construire un service local LiteLLM qui partage un unique login OAuth ChatGPT/Co
 2. Copier `.env.example` vers `.env` et configurer les valeurs.
 3. Créer `litellm-auth/`, lancer l’image LiteLLM avec `Authenticator().get_access_token()` et demander le code sur `https://auth.openai.com/codex/device`.
 4. Lancer `./start.sh` : générer si nécessaire le certificat SAN auto-signé, récupérer le catalogue, lancer LiteLLM sur HTTPS/4000 et le serveur de certificat sur 4001.
-5. Pour le package Pi, récupérer le certificat public avec `wget http://<serveur>:4001/litellm.crt`, définir `NODE_EXTRA_CA_CERTS`, installer `pi-provider-litellm`, puis configurer `/login litellm`. Garder l’extension personnalisée en alternative.
+5. Sur chaque client, installer le package officiel Pi, récupérer le certificat public avec `wget http://<serveur>:4001/litellm.crt`, définir `NODE_EXTRA_CA_CERTS`, puis configurer `/login litellm`.
 6. Vérifier `/v1/models`, une vraie requête HTTPS et l’exécution locale d’un outil Pi.
 7. Ne jamais supprimer les volumes persistants contenant base de données ou jetons sans autorisation explicite.
