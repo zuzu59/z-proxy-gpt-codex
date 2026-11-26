@@ -1,40 +1,41 @@
 # LiteLLM Codex Gateway
 
-Ce dépôt fournit un proxy LiteLLM local. Le login ChatGPT/Codex est géré
-sur le serveur ; plusieurs clients Pi utilisent les modèles du compte. Les
-outils Pi (par exemple le terminal) restent exécutés sur chaque client.
+Ce projet déploie sur un réseau local un proxy LiteLLM qui partage un compte
+ChatGPT/Codex entre plusieurs clients. L’authentification OAuth reste sur le
+serveur ; les agents exécutent leurs outils sur leur propre ordinateur.
 
-Pi utilise le package officiel `pi-provider-litellm`. Le serveur actualise la
-liste des modèles au démarrage ; il n’est pas nécessaire de les ajouter un
-par un dans la configuration de Pi.
+Le catalogue des modèles Codex est récupéré au démarrage du proxy et exposé
+par l’API LiteLLM. Il n’est pas nécessaire de maintenir une liste de modèles
+manuellement dans chaque client.
 
-## Fonctionnement et adresses
+## Guides clients
 
-Exemple avec l’adresse LAN du serveur `192.168.0.92` :
+- Installer et utiliser le proxy : ce document.
+- Configurer Pi Agent : [guide Pi][guide-pi].
+- Configurer OpenCode : [guide OpenCode][guide-opencode].
 
-| Fonction | Adresse ou port |
-| --- | --- |
-| API HTTPS LiteLLM | `https://192.168.0.92:4000` |
-| Certificat TLS public | `http://192.168.0.92:4001/litellm.crt` |
-| Installateur Pi | `http://192.168.0.92:4001/install_litllm_pi.sh` |
-| Console LiteLLM | `https://192.168.0.92:4000/ui` |
+## Architecture et ports
 
-Le port `4000` fournit l’API LiteLLM en HTTPS. Le port `4001` est un serveur
-HTTP minimal qui ne distribue que le certificat public et le script
-d’installation, par une liste blanche de chemins. Il ne monte ni ne distribue
-la clé privée TLS.
+Exemple d’adresse LAN du serveur : `192.168.0.92`.
 
-Les commandes ci-dessous utilisent `192.168.0.92` comme exemple. Si le serveur
-utilise une autre adresse, remplace-la par son adresse LAN. Seuls les ports
-`4000` et `4001` doivent être accessibles depuis les clients Pi ; aucun port
-inférieur à `1000` n’est utilisé.
+| Service | Adresse | Usage |
+| --- | --- | --- |
+| API et console LiteLLM | `https://192.168.0.92:4000` | API, `/ui` |
+| Téléchargement | `http://192.168.0.92:4001` | Certificat et installateur Pi |
+| PostgreSQL | réseau Docker uniquement | État de gestion LiteLLM |
 
-## Installer le serveur LiteLLM
+LiteLLM sert directement HTTPS sur le port `4000` avec un certificat
+auto-signé. Le serveur HTTP du port `4001` ne sert que deux chemins autorisés :
+`/litellm.crt` et `/install_litllm_pi.sh`. Il ne monte jamais la clé privée.
+PostgreSQL n’est pas publié sur le réseau hôte ; ses données résident dans le
+volume Docker `litellm_db`.
 
-Effectue ces étapes sur l’ordinateur qui hébergera LiteLLM. Il doit avoir
-Docker Compose, OpenSSL et la commande `ip` installés.
+## Installer le proxy
 
-### 1. Récupérer le projet et configurer les secrets
+Effectue ces étapes sur l’ordinateur qui hébergera le proxy. Il faut Docker
+avec Compose, OpenSSL et la commande `ip`.
+
+### 1. Récupérer le projet et préparer les secrets
 
 ```sh
 git clone https://github.com/zuzu59/z-proxy-gpt-codex.git
@@ -42,160 +43,108 @@ cd z-proxy-gpt-codex
 cp .env.example .env
 ```
 
-Ouvre `.env` et change au minimum `LITELLM_MASTER_KEY=admin` pour une clé
-personnelle forte. Le mot de passe PostgreSQL d’exemple doit aussi être
-remplacé lors d’une nouvelle installation.
+Modifie `.env` avant le premier démarrage :
 
-> Si le volume PostgreSQL existe déjà, ne change pas uniquement
-> `LITELLM_DB_PASSWORD` dans `.env`. Il doit correspondre au mot de passe déjà
-> configuré dans la base.
+- remplace `LITELLM_MASTER_KEY=admin` par une clé forte et privée ;
+- choisis un mot de passe PostgreSQL pour `LITELLM_DB_PASSWORD`.
 
-`.env`, les jetons OAuth et les certificats privés sont locaux et ne doivent
-jamais être envoyés sur GitHub.
+Attention : Compose active aussi
+`LITELLM_DANGEROUSLY_PERMIT_WEAK_OR_UNSET_MASTER_KEY=true` pour le mode de
+démonstration. Si tu remplaces `admin` par une clé forte, désactive ce
+paramètre dans `docker-compose.yml` (ou retire-le), puis vérifie que LiteLLM
+démarre correctement. Ne conserve pas cette option sur un serveur exposé.
+
+Si la base existe déjà, conserve le mot de passe PostgreSQL qui lui
+correspond. Changer uniquement `.env` ne change pas le mot de passe d’un
+volume déjà initialisé.
+
+Ne versionne jamais `.env`, `litellm-auth/` ou `tls/litellm.key`.
 
 ### 2. Connecter le compte ChatGPT/Codex
 
-L’authentification se fait une fois sur le serveur. Lance :
+Sur le serveur, lance le flux OAuth par code d’appareil :
 
 ```sh
 ./get_authentification.sh
 ```
 
-Suis les instructions pour ouvrir la page de connexion et saisir le code
-d’appareil. Connecte le compte ChatGPT/Codex qui possède les modèles à
-partager. Les jetons sont conservés dans `litellm-auth/` sur le serveur.
+Suis les instructions affichées et connecte le compte qui possède les modèles
+à partager. Les jetons sont conservés localement dans `litellm-auth/` ; ils ne
+sont pas transmis aux clients.
 
-### 3. Démarrer les services
+### 3. Démarrer LiteLLM
 
 ```sh
 ./start.sh
 ```
 
-Au démarrage, le script détecte l’adresse LAN et crée le certificat
-auto-signé si nécessaire. Il lance ensuite LiteLLM, PostgreSQL et le serveur
-de téléchargement. LiteLLM relit le catalogue Codex du compte et met à jour
-sa liste de modèles.
+Le script détecte l’adresse LAN, crée le certificat s’il n’existe pas, puis
+démarre LiteLLM, PostgreSQL et le serveur de téléchargement. Il affiche les
+adresses des services.
 
-Si l’adresse détectée est incorrecte, indique l’adresse LAN manuellement :
+Si l’adresse détectée est incorrecte, indique-la explicitement :
 
 ```sh
 LITELLM_DOMAIN=192.168.0.92 ./start.sh
 ```
 
-Le terminal affiche ensuite les adresses des services.
-`LITELLM_MASTER_KEY` permet d’accéder à l’API et à la console
-d’administration. N’expose pas le service à Internet.
+Au démarrage, `start_litellm.py` actualise le catalogue depuis l’API Codex et
+régénère `model_list` dans `litellm-config.yaml`. Ne maintiens pas cette liste
+à la main : elle est remplacée par le catalogue du compte.
 
-### Changer l’adresse IP du serveur
+### 4. Vérifier le déploiement
 
-Le certificat contient l’adresse du serveur. Si elle change, supprime les
-anciens certificats puis redémarre avec la nouvelle adresse :
+```sh
+docker compose ps
+docker compose logs -f litellm
+```
+
+Pour vérifier l’accès depuis un client, utilise les instructions de test
+spécifiques à l’agent : [Pi][guide-pi] ou [OpenCode][guide-opencode]. Elles
+montrent comment présenter le certificat public et la clé configurée dans
+`LITELLM_MASTER_KEY`.
+
+## Certificat et changement d’adresse
+
+Le certificat auto-signé est généré pour l’adresse IP ou le nom indiqué par
+`LITELLM_DOMAIN`. Les fichiers restent dans `tls/`. Si l’adresse change,
+supprime le certificat et sa clé, puis redémarre avec la nouvelle adresse :
 
 ```sh
 rm -f tls/litellm.crt tls/litellm.key
 LITELLM_DOMAIN=192.168.0.50 ./start.sh
 ```
 
-Le certificat sera recréé pour cette adresse. Ne partage jamais
-`tls/litellm.key`.
+Ne partage jamais `tls/litellm.key`. Le certificat public peut être téléchargé
+à `http://<serveur>:4001/litellm.crt`.
 
-## Installer Pi sur un ordinateur client
+## Sécurité
 
-Pi doit déjà être installé sur chaque ordinateur client. Depuis un terminal
-sur cet ordinateur, lance :
+- Ce déploiement est prévu pour un réseau local de confiance, pas pour être
+  exposé directement à Internet.
+- Docker publie par défaut les ports `4000` et `4001` sur toutes les
+  interfaces réseau de l’hôte. Restreins-les avec le pare-feu ou limite leur
+  publication à l’adresse LAN ; ne les laisse pas accessibles depuis Internet.
+- Le port `4001` utilise HTTP sans authentification. Le téléchargement initial
+  du certificat et du script n’est pas protégé contre un appareil malveillant
+  présent sur le même réseau.
+- La clé LiteLLM donne accès au proxy. Utilise une valeur forte et protège-la.
+- L’API amont `/backend-api/codex/models` est interne et non garantie comme
+  stable ; le format peut évoluer.
+- N’utilise pas `NODE_TLS_REJECT_UNAUTHORIZED=0` pour contourner les erreurs
+  de certificat des clients.
 
-```sh
-IP=192.168.0.92
-curl -fsSL "http://$IP:4001/install_litllm_pi.sh" | bash -s -- "$IP"
-```
+`./stop.sh` arrête les conteneurs sans supprimer le volume PostgreSQL. Ne
+lance pas `docker compose down -v` sauf si tu souhaites effacer la base.
 
-Remplace uniquement la valeur de `IP` si le serveur a une autre adresse.
-Cette commande télécharge et exécute l’installateur distribué par le
-serveur LiteLLM.
+## Documentation connexe
 
-L’installateur :
+- [Architecture technique][architecture] décrit les services, flux, limites
+  et frontières de confiance.
+- [Guide Pi][guide-pi] couvre l’installation et l’utilisation côté client.
+- [Guide OpenCode][guide-opencode] couvre le plugin LiteLLM et la découverte
+  des modèles.
 
-1. télécharge le certificat public et vérifie qu’il correspond à
-   l’adresse fournie ;
-2. installe le package officiel `pi-provider-litellm` ;
-3. ajoute les paramètres LiteLLM à `~/.pi/agent/settings.json` sans effacer
-   les autres réglages Pi ;
-4. demande la clé API du serveur. Appuie sur Entrée pour garder `admin`, ou
-   saisis la valeur définie dans `.env` ;
-5. protège `settings.json` pour qu’il ne soit lisible que par ton compte ;
-6. configure `NODE_EXTRA_CA_CERTS` dans le profil Bash ou Zsh afin que Node.js
-   accepte le certificat auto-signé du serveur.
-
-Ferme et rouvre ensuite le terminal pour charger la variable d’environnement,
-puis lance Pi normalement :
-
-```sh
-pi
-```
-
-Dans Pi, utilise `/model` pour parcourir les modèles disponibles et en choisir
-un. Tu n’as pas besoin de relancer `/login` : l’installateur a configuré
-l’adresse du proxy et la clé API dans les paramètres Pi.
-
-### Limite de sécurité du téléchargement
-
-Le téléchargement et l’exécution de l’installateur utilisent HTTP. Cette
-méthode suppose que le réseau local est de confiance ; ne l’utilise pas sur
-un Wi-Fi public ou un réseau que tu ne contrôles pas. Un autre appareil
-malveillant présent sur le même réseau pourrait modifier le script ou le
-certificat transmis.
-
-Le certificat auto-signé permet à Node.js de vérifier la connexion HTTPS au
-proxy une fois le certificat installé. Il ne protège pas contre un attaquant
-capable d’intercepter le téléchargement initial. N’utilise pas
-`NODE_TLS_REJECT_UNAUTHORIZED=0` : cela désactive la validation TLS pour toutes
-les connexions HTTPS lancées par Pi.
-
-## Vérifier le service
-
-Depuis le client Pi, vérifie que l’API HTTPS répond et que la liste des
-modèles est accessible :
-
-```sh
-IP=192.168.0.92
-CERT="$HOME/.pi/agent/litellm.crt"
-API_KEY=admin
-curl --cacert "$CERT" "https://$IP:4000/health/liveliness"
-curl --cacert "$CERT" \
-  -H "Authorization: Bearer $API_KEY" \
-  "https://$IP:4000/v1/models"
-```
-
-Si tu as remplacé `admin`, mets ta clé API dans `API_KEY`.
-
-Pour consulter les journaux LiteLLM en cas de problème, exécute cette
-commande sur le serveur :
-
-```sh
-docker compose logs -f litellm
-```
-
-Si aucun modèle n’apparaît, vérifie le login ChatGPT/Codex du serveur, puis
-relance `./start.sh` pour actualiser le catalogue.
-
-## Arrêter le service
-
-Sur le serveur, arrête les conteneurs sans supprimer les jetons OAuth ni les
-données PostgreSQL :
-
-```sh
-./stop.sh
-```
-
-Les données sont conservées. N’utilise pas `docker compose down -v` sauf si
-tu veux explicitement supprimer le volume PostgreSQL.
-
-## Fichiers locaux et secrets
-
-- `.env` contient les clés et mots de passe propres au serveur.
-- `litellm-auth/` contient les jetons OAuth ChatGPT/Codex.
-- `tls/litellm.key` est la clé privée du certificat HTTPS.
-- `tls/litellm.crt` est le certificat public distribué aux clients.
-
-Ces fichiers restent locaux et sont exclus de Git. Ne publie jamais `.env`,
-les jetons OAuth ou `tls/litellm.key`.
+[architecture]: ARCHITECTURE.md
+[guide-pi]: README_PI.md
+[guide-opencode]: README_OPENCODE.md
