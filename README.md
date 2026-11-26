@@ -21,43 +21,17 @@ Si l’adresse de ton serveur est différente, remplace `192.168.0.92` par son a
 
 Le login ChatGPT Codex se fait une seule fois côté serveur. Au redémarrage, le catalogue du compte est relu et `litellm-config.yaml` est régénéré. Si l’adresse IP change, supprime `tls/litellm.crt` et `tls/litellm.key`, puis relance `./start.sh` pour générer un certificat correspondant à la nouvelle adresse. Ces fichiers sont ignorés par Git ; ne partage jamais la clé privée.
 
-## Configurer chaque client Pi
+## Installer le client Pi en une commande
 
-Installe le package (ou garde-le dans la liste `packages` de `~/.pi/agent/settings.json`) :
-
-```sh
-pi install npm:pi-provider-litellm
-```
-
-Puis télécharge le certificat et lance Pi en lui indiquant de lui faire confiance :
+Sur l’ordinateur où Pi est installé, exécute cette commande. Elle télécharge et lance le script d’installation depuis GitHub :
 
 ```sh
-mkdir -p ~/.pi/agent
-wget http://192.168.0.92:4001/litellm.crt -O ~/.pi/agent/litellm.crt
-NODE_EXTRA_CA_CERTS="$HOME/.pi/agent/litellm.crt" pi
+curl -fsSL https://raw.githubusercontent.com/zuzu59/z-proxy-gpt-codex/master/install_litllm_pi.sh | bash -s -- 192.168.0.92
 ```
 
-Dans Pi, lance `/login litellm`, saisis l’URL `https://192.168.0.92:4000` et la clé API (`admin`), puis `/model` pour choisir un modèle.
+Le script télécharge le certificat depuis le serveur LAN, installe le package officiel `pi-provider-litellm`, ajoute les paramètres du fournisseur à `~/.pi/agent/settings.json` sans supprimer les autres réglages, puis configure `NODE_EXTRA_CA_CERTS` dans le profil Bash ou Zsh. Il demande la clé API (la valeur par défaut est `admin`) et protège `settings.json` avec des permissions privées. Ferme et rouvre ensuite le terminal : tu pourras lancer simplement `pi`.
 
-Pour configurer directement l’URL dans `~/.pi/agent/settings.json`, fusionne cette section à la racine du fichier, en conservant tes autres paramètres :
-
-```json
-{
-  "litellm": {
-    "providers": {
-      "litellm": {
-        "baseUrl": "https://192.168.0.92:4000"
-      }
-    }
-  }
-}
-```
-
-N’ajoute pas `allowInsecureHttp` avec HTTPS. Pour que chaque nouveau terminal Pi charge automatiquement le certificat, ajoute ceci au profil shell utilisé (`~/.bashrc` ou `~/.zshrc`) :
-
-```sh
-export NODE_EXTRA_CA_CERTS="$HOME/.pi/agent/litellm.crt"
-```
+Si l’adresse du serveur est différente, remplace `192.168.0.92` dans la commande. Si la clé API n’est pas `admin`, saisis la bonne valeur lorsque le script la demande. Le script nécessite `curl`, `openssl`, `node`, Pi et un shell Bash ou Zsh.
 
 Le téléchargement HTTP du certificat n’authentifie pas le serveur ; cette méthode est prévue pour le réseau local de confiance. Il faut conserver `NODE_EXTRA_CA_CERTS` : sans cela, Node rejette le certificat auto-signé. Évite `NODE_TLS_REJECT_UNAUTHORIZED=0`, qui désactive la validation TLS pour toutes les connexions HTTPS de Pi.
 

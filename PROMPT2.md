@@ -28,7 +28,8 @@ Construire un service local LiteLLM qui partage un unique login OAuth ChatGPT/Co
 - `.env` : local, ignoré par Git ; ne jamais committer secrets.
 - `.gitignore` : au minimum `.env` et `litellm-auth/`.
 - `litellm-auth/` : stockage local OAuth, jamais versionné.
-- `README.md` : procédure complète de démarrage et dépannage.
+- `install_litllm_pi.sh` : installateur client appelé par une commande `curl | bash`, télécharge le certificat, installe le package Pi officiel, fusionne les paramètres requis dans `settings.json` sans écraser le reste et configure `NODE_EXTRA_CA_CERTS`.
+- `README.md` : procédure de démarrage et commande `curl | bash` complète pour les clients Pi.
 
 ## Procédure d’installation attendue
 
@@ -36,6 +37,6 @@ Construire un service local LiteLLM qui partage un unique login OAuth ChatGPT/Co
 2. Copier `.env.example` vers `.env` et configurer les valeurs.
 3. Créer `litellm-auth/`, lancer l’image LiteLLM avec `Authenticator().get_access_token()` et demander le code sur `https://auth.openai.com/codex/device`.
 4. Lancer `./start.sh` : générer si nécessaire le certificat SAN auto-signé, récupérer le catalogue, lancer LiteLLM sur HTTPS/4000 et le serveur de certificat sur 4001.
-5. Sur chaque client, installer le package officiel Pi, récupérer le certificat public avec `wget http://<serveur>:4001/litellm.crt`, définir `NODE_EXTRA_CA_CERTS`, puis configurer `/login litellm`.
+5. Sur chaque client, exécuter la commande documentée `curl | bash` pour lancer `install_litllm_pi.sh` ; celui-ci télécharge et valide le certificat par rapport à l’IP, installe `pi-provider-litellm`, fusionne `litellm.providers.litellm` dans `settings.json`, demande la clé API, et ajoute `NODE_EXTRA_CA_CERTS` au profil shell. Après ouverture d’un nouveau terminal, Pi doit démarrer directement avec `pi`.
 6. Vérifier `/v1/models`, une vraie requête HTTPS et l’exécution locale d’un outil Pi.
 7. Ne jamais supprimer les volumes persistants contenant base de données ou jetons sans autorisation explicite.

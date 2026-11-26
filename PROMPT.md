@@ -20,6 +20,7 @@ Déployer LiteLLM avec Docker Compose pour partager une seule authentification C
 - `.env.example` et `.env` local ignoré par Git
 - `.gitignore` qui exclut les jetons OAuth
 - `start_litellm.py`, `generate-self-signed-cert.sh` et `serve_cert.py`
-- `README.md` avec les étapes d’installation, d’authentification, de configuration Pi et de vérification
+- `install_litllm_pi.sh` : installateur client lancé avec `curl | bash`, télécharge le certificat, installe le package officiel Pi, fusionne les paramètres dans `settings.json` et configure `NODE_EXTRA_CA_CERTS`.
+- `README.md` avec la commande `curl | bash` et les étapes d’installation, d’authentification et de vérification
 
 Ne jamais versionner les jetons OAuth, les secrets locaux ou `.env`. Ne pas déployer ni documenter d’autre proxy.
