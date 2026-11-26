@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SERVER_HOST="${1:-192.168.0.92}"
+if [[ $# -ne 1 ]]; then
+  echo "Usage: install_litllm_pi.sh <server-ip-or-hostname>" >&2
+  exit 2
+fi
+SERVER_HOST="$1"
 if [[ ! "$SERVER_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
   echo "Usage: install_litllm_pi.sh [server-ip-or-hostname]" >&2
   exit 2

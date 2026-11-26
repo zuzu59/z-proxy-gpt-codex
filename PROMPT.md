@@ -6,7 +6,7 @@ Déployer LiteLLM avec Docker Compose pour partager une seule authentification C
 
 - Utiliser l’image `ghcr.io/berriai/litellm:main-stable` et le fournisseur ChatGPT/Codex natif de LiteLLM (`chatgpt/gpt-6-luna`).
 - Effectuer le login OAuth par code d’appareil une seule fois sur le serveur, puis persister les jetons dans `litellm-auth/` monté sur `/root/.config/litellm/chatgpt`.
-- Exposer LiteLLM directement en HTTPS sur le port `4000` du LAN avec un certificat auto-signé. Un petit endpoint sur le port `4001` distribue uniquement le certificat public pour `wget` côté clients ; ne pas utiliser de reverse proxy ni de port inférieur à `1000`.
+- Exposer LiteLLM directement en HTTPS sur le port `4000` du LAN avec un certificat auto-signé. Le serveur simple sur le port `4001` ne distribue que le certificat public et `install_litllm_pi.sh` ; ne jamais exposer la clé privée. Ne pas utiliser de reverse proxy ni de port inférieur à `1000`.
 - Déployer PostgreSQL pour la console LiteLLM et persister ses données dans un volume Docker.
 - Configurer une master key locale `admin` pour l’interface et l’API. Documenter clairement que ce secret faible impose de limiter le port au LAN et de ne jamais l’exposer à Internet.
 - Au démarrage, lire le catalogue ChatGPT Codex et générer `model_list` dans `litellm-config.yaml`.
@@ -19,7 +19,7 @@ Déployer LiteLLM avec Docker Compose pour partager une seule authentification C
 - `litellm-config.yaml`
 - `.env.example` et `.env` local ignoré par Git
 - `.gitignore` qui exclut les jetons OAuth
-- `start_litellm.py`, `generate-self-signed-cert.sh` et `serve_cert.py`
+- `start_litellm.py`, `generate-self-signed-cert.sh`, `serve_cert.py` (liste blanche de deux fichiers publics) et `install_litllm_pi.sh`
 - `install_litllm_pi.sh` : installateur client lancé avec `curl | bash`, télécharge le certificat, installe le package officiel Pi, fusionne les paramètres dans `settings.json` et configure `NODE_EXTRA_CA_CERTS`.
 - `README.md` avec la commande `curl | bash` et les étapes d’installation, d’authentification et de vérification
 

@@ -55,6 +55,7 @@ services:
     volumes:
       - ./serve_cert.py:/app/serve_cert.py:ro
       - ./tls/litellm.crt:/cert/litellm.crt:ro
+      - ./install_litllm_pi.sh:/scripts/install_litllm_pi.sh:ro
 
 volumes:
   litellm_db:
